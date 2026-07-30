@@ -29,6 +29,40 @@ QWidget#sidebar {{
     background: {COLORS['sidebar']};
 }}
 
+QScrollArea#sidebarScroll, QScrollArea#sidebarScroll > QWidget > QWidget {{
+    background: {COLORS['sidebar']};
+    border: none;
+}}
+
+QScrollArea#sidebarScroll QScrollBar:vertical {{
+    background: {COLORS['sidebar']};
+    width: 8px;
+    margin: 0;
+}}
+QScrollArea#sidebarScroll QScrollBar::handle:vertical {{
+    background: #475569;
+    border-radius: 4px;
+    min-height: 24px;
+}}
+QScrollArea#sidebarScroll QScrollBar::handle:vertical:hover {{
+    background: #64748B;
+}}
+QScrollArea#sidebarScroll QScrollBar::add-line:vertical,
+QScrollArea#sidebarScroll QScrollBar::sub-line:vertical {{
+    height: 0;
+}}
+QScrollArea#sidebarScroll QScrollBar::add-page:vertical,
+QScrollArea#sidebarScroll QScrollBar::sub-page:vertical {{
+    background: transparent;
+}}
+
+QSplitter#mainSplitter::handle {{
+    background: {COLORS['border']};
+}}
+QSplitter#mainSplitter::handle:hover {{
+    background: {COLORS['primary']};
+}}
+
 QLabel#appTitle {{
     color: {COLORS['text_on_dark']};
     font-size: 16px;
@@ -140,6 +174,32 @@ QSlider#thresholdSlider::handle:horizontal {{
 QSlider#thresholdSlider::sub-page:horizontal {{
     background: {COLORS['primary']};
     border-radius: 2px;
+}}
+
+QCheckBox#clusterCheck {{
+    color: {COLORS['text_on_dark_muted']};
+    font-size: 11px;
+    spacing: 6px;
+}}
+QCheckBox#clusterCheck::indicator {{
+    width: 14px;
+    height: 14px;
+    border: 1px solid #475569;
+    border-radius: 3px;
+    background: {COLORS['sidebar_alt']};
+}}
+QCheckBox#clusterCheck::indicator:checked {{
+    background: {COLORS['primary']};
+    border-color: {COLORS['primary']};
+}}
+
+QSpinBox#thresholdSpin {{
+    background: {COLORS['sidebar_alt']};
+    color: {COLORS['text_on_dark']};
+    border: 1px solid #334155;
+    border-radius: 4px;
+    padding: 3px 6px;
+    font-size: 12px;
 }}
 
 QFrame#kpiCard {{

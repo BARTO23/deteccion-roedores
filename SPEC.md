@@ -50,25 +50,47 @@ deteccion_roedores/
 
 ## 4. Algoritmo de Detección v1
 
-### 4.1 Replicar lógica MATLAB
-- Recorrer imagen térmica píxel a píxel
-- Comparar valor central con vecinos (derecho, superior, izquierdo, inferior)
-- Aplicar umbral de sensibilidad T = 0.56
-- Marcar posición cuando se detecta patrón caliente
+### 4.1 Replicar lógica MATLAB (implementado)
 
-### 4.2 Pipeline mejorado (scikit-image)
-1. Normalizar imagen térmica a rango [0, 1]
-2. Aplicar umbral adaptable o fijo (valor inicial: percentil 90)
-3. Operaciones morfológicas (apertura/cierre) para eliminar ruido
-4. Etiquetar componentes conectados con `label()`
-5. Calcular centroides con `regionprops()`
-6. Filtrar por área mínima/máxima (evitar ruido y blobs grandes)
+Para cada píxel interior (`x = 2..W-1`, `y = 2..H-1`, índices MATLAB 1-based):
+
+```
+B  = Q(y, x)      bd = Q(y, x+1)    ba = Q(y-1, x)
+bi = Q(y, x-1)    bb = Q(y+1, x)
+
+b_k = abs(abs(B) - abs(vecino_k))          para k = derecha, arriba, izquierda, abajo
+c   = #{ k : B > vecino_k  y  b_k < 1000  y  b_k > T }
+
+detección  <=>  c > 2
+```
+
+Puntos críticos a respetar:
+- Las 4 comparaciones son **independientes**; no se promedian los vecinos.
+- `abs(abs(B) - abs(n))` no equivale a `abs(B - n)` cuando los signos difieren.
+- `b < 1000` es lo que excluye el fondo (`-32767`); no hace falta máscara aparte.
+- El umbral `T` es un delta de temperatura en unidades de la imagen, **no** un valor
+  normalizado en [0,1].
+- Equivalencia en numpy 0-based: centro `img[1:-1, 1:-1]`, derecha `img[1:-1, 2:]`,
+  arriba `img[:-2, 1:-1]`, izquierda `img[1:-1, :-2]`, abajo `img[2:, 1:-1]`.
+
+### 4.2 Post-proceso: agrupamiento (opcional)
+
+El original cuenta un roedor por cada píxel que dispara, así que un animal repartido
+en píxeles contiguos se cuenta varias veces. `BlobAnalyzer.cluster_points()` une por
+union-find las detecciones separadas por <= `merge_radius` y deja un centroide por grupo.
+
+Medido sobre `Or17-18.tif` con T=0.56: 227 píxeles → 217 grupos. Los blobs promedian
+1.03 px, así que la inflación del conteo original es baja (~4%).
+
+**Descartado**: el pipeline morfológico con `opening`/`closing` + `remove_small_objects`
+que planteaba la versión inicial de este documento. Con detecciones de un solo píxel —
+que son la mayoría — una apertura las elimina todas.
 
 ### 4.3 Parámetros ajustables
-- `threshold`: Umbral de detección (default: 0.56)
-- `min_area`: Área mínima del blob (pixels)
-- `max_area`: Área máxima del blob (pixels)
-- `morph_kernel`: Tamaño del kernel morfológico
+- `threshold` (T): Delta mínimo de temperatura contra un vecino (default: 0.56)
+- `min_neighbors`: Vecinos que deben cumplir, de 4 (default: 3, equivale a `c > 2`)
+- `max_delta`: Cota superior que descarta el fondo (default: 1000, constante del original)
+- `merge_radius`: Radio para agrupar detecciones contiguas (default: 3, opcional)
 
 ## 5. Interfaz de Usuario
 

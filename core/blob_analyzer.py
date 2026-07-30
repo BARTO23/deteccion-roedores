@@ -67,6 +67,66 @@ class BlobAnalyzer:
         app_logger.info(f"Blobs agrupados: {len(centroids)}")
         return centroids
 
+    def cluster_points(
+        self,
+        points: List[Tuple[int, int]],
+        merge_radius: int = 3
+    ) -> List[Tuple[int, int]]:
+        """Agrupa detecciones vecinas y devuelve un centroide por grupo.
+
+        El script MATLAB cuenta un roedor por cada pixel que dispara, así que un
+        mismo animal repartido en pixeles contiguos se contaba varias veces.
+        Aquí se unen los pixeles separados por <= `merge_radius` (union-find) y
+        cada grupo aporta un solo punto. No usa morfología a propósito: una
+        apertura eliminaría las detecciones de un solo pixel, que son la mayoría.
+        """
+        if not points:
+            return []
+
+        n = len(points)
+        parent = list(range(n))
+
+        def find(i: int) -> int:
+            while parent[i] != i:
+                parent[i] = parent[parent[i]]
+                i = parent[i]
+            return i
+
+        def union(i: int, j: int):
+            ri, rj = find(i), find(j)
+            if ri != rj:
+                parent[rj] = ri
+
+        arr = np.asarray(points, dtype=np.int64)
+        # Orden por x para comparar solo contra los candidatos cercanos.
+        order = np.argsort(arr[:, 0], kind="stable")
+        r2 = merge_radius * merge_radius
+
+        for a in range(n):
+            ia = order[a]
+            xa, ya = arr[ia]
+            for b in range(a + 1, n):
+                ib = order[b]
+                xb, yb = arr[ib]
+                if xb - xa > merge_radius:
+                    break
+                dy = yb - ya
+                if dy * dy + (xb - xa) ** 2 <= r2:
+                    union(ia, ib)
+
+        groups = {}
+        for i in range(n):
+            groups.setdefault(find(i), []).append(i)
+
+        centroids = [
+            (int(round(arr[idx, 0].mean())), int(round(arr[idx, 1].mean())))
+            for idx in groups.values()
+        ]
+        centroids.sort(key=lambda p: (p[1], p[0]))
+
+        app_logger.info(f"Detecciones agrupadas: {n} pixeles -> {len(centroids)} roedores")
+        return centroids
+
     def _apply_morphology(self, binary_mask: np.ndarray) -> np.ndarray:
         if self.morph_kernel_size > 0:
             kernel = morphology.disk(self.morph_kernel_size // 2)

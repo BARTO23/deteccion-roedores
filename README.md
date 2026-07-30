@@ -12,12 +12,31 @@ El sistema detecta la presencia de roedores en la imagen térmica, estima su pos
 
 ## Algoritmo
 
-El método de detección replica la lógica del script MATLAB original:
-1. Recorre la imagen térmica píxel a píxel
-2. Compara el valor central con el promedio de sus 4 vecinos (arriba, abajo, izquierda, derecha)
-3. Aplica un umbral de sensibilidad T (por defecto 0.58)
-4. Marca como detección cuando la diferencia supera el umbral
-5. Escala las coordenadas para proyectarlas sobre la imagen visible
+Replica exactamente el script MATLAB original (`identificación de roedores.txt`).
+
+Para cada píxel interior de la imagen térmica (`x = 2..W-1`, `y = 2..H-1` en índices
+MATLAB) se compara el píxel central `B` contra sus 4 vecinos ortogonales **de forma
+independiente** (no contra su promedio):
+
+```
+b = abs(abs(B) - abs(vecino))
+cuenta si:  B > vecino   y   T < b < 1000
+```
+
+Se marca detección cuando **al menos 3 de los 4 vecinos** cumplen (`c > 2` en el
+original). La cota superior `b < 1000` es la que descarta el fondo de la imagen
+(valor `-32767`): la diferencia contra el fondo es enorme y nunca pasa el filtro.
+
+Diferencias deliberadas respecto al original:
+
+- **Escalado de coordenadas**: MATLAB dibujaba en coordenadas de la térmica sobre la
+  figura de la visible. Como las imágenes no tienen el mismo tamaño (9992×8835 vs
+  9750×8511), eso desplazaba los puntos hasta ~300 px en los bordes. Aquí se reescalan.
+- **Agrupamiento opcional**: el original cuenta un roedor por cada píxel que dispara,
+  así que un animal repartido en píxeles contiguos se contaba varias veces. La opción
+  "Agrupar píxeles contiguos" une las detecciones vecinas en un solo punto.
+- **Vectorizado por bloques de filas**: mismo resultado que el doble ciclo píxel a
+  píxel, pero procesa una térmica de 88 M de píxeles en ~3 s en vez de horas.
 
 ## Requisitos
 
@@ -56,7 +75,7 @@ python -m venv venv --without-pip
 1. **Ejecutar la app**: `python app.py`
 2. **Cargar imagen térmica**: Click en "Cargar TIF Térmico" y selecciona tu archivo `.tif`
 3. **Cargar imagen visible**: Click en "Cargar PNG Visible" y selecciona tu archivo `.jpg` o `.png`
-4. **Ajustar umbral**: El valor por defecto es 0.58 (aproximadamente 194 detecciones para imágenes de prueba)
+4. **Ajustar umbral**: El valor por defecto es 0.56, el mismo `T` del script MATLAB
    - Valores menores = más detecciones
    - Valores mayores = menos detecciones
 5. **Detectar**: Click en "Detectar" para ejecutar el algoritmo
@@ -67,15 +86,29 @@ python -m venv venv --without-pip
 
 ## Parámetros de detección
 
-| Umbral | Detecciones aproximadas |
-|--------|-------------------------|
-| 0.50   | ~845                    |
-| 0.54   | ~393                    |
-| 0.58   | ~194                    |
-| 0.60   | ~144                    |
-| 0.64   | ~83                     |
+| Parámetro | Default | Descripción |
+|-----------|---------|-------------|
+| `T` (umbral) | 0.56 | Delta mínimo de temperatura contra un vecino. Es el `T` del original |
+| Vecinos mínimos | 3 | Cuántos de los 4 vecinos deben cumplir (`c > 2` en el original) |
+| Delta máximo | 1000 | Cota superior que descarta el fondo. Constante del original |
 
-El valor recomendado es **0.58** que se aproxima a los 198 roedores del script MATLAB original.
+Conteos medidos sobre `img-test/Or17-18.tif` (8835×9992) con el algoritmo fiel:
+
+| Umbral T | Píxeles detectados | Agrupados (radio 3) |
+|----------|--------------------|---------------------|
+| 0.50     | 798                | ~760                |
+| 0.54     | 339                | ~324                |
+| 0.56     | **227**            | **217**             |
+| 0.58     | 156                | ~148                |
+| 0.60     | 97                 | —                   |
+| 0.64     | 47                 | —                   |
+
+Con el valor original **T = 0.56** el resultado es **227 píxeles / 217 roedores agrupados**.
+
+> Nota: versiones anteriores de este README citaban ~194 detecciones con T=0.58. Ese
+> número venía de una implementación que promediaba los 4 vecinos — un algoritmo
+> distinto al del script MATLAB. Las cifras de la tabla son del algoritmo fiel.
+> Si tu corrida de MATLAB da otro conteo, calibrá `T` contra ese valor de referencia.
 
 ## Estructura del proyecto
 
@@ -83,11 +116,13 @@ El valor recomendado es **0.58** que se aproxima a los 198 roedores del script M
 deteccion_roedores/
 ├── core/
 │   ├── image_loader.py      # Lectura de imágenes TIF/JPG/PNG
-│   ├── detector.py          # Algoritmo de detección térmica
-│   ├── blob_analyzer.py     # Análisis de componentes (no usado en v1)
+│   ├── detector.py          # Detección térmica (réplica del MATLAB)
+│   ├── blob_analyzer.py     # Agrupamiento de detecciones contiguas
 │   └── projector.py         # Proyección de puntos sobre imagen visible
 ├── ui/
-│   └── main_window.py       # Interfaz gráfica con PySide6
+│   ├── main_window.py       # Interfaz gráfica con PySide6
+│   ├── styles.py            # Paleta y hoja de estilos QSS
+│   └── worker.py            # Detección en QThread (no bloquea la UI)
 ├── utils/
 │   ├── logger.py            # Logging de la aplicación
 │   └── exporter.py         # Exportación de resultados
